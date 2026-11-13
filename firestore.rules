@@ -1,0 +1,38 @@
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+  function signedIn(){return request.auth != null;}
+  function isInstructor(){return signedIn() && request.auth.token.labAdmin == true;}
+  match /instructorRequests/{uid} {
+   allow create: if signedIn() && request.auth.uid==uid && request.resource.data.uid==uid && request.resource.data.email==request.auth.token.email && request.resource.data.status=='pending' && request.resource.data.keys().hasOnly(['uid','email','displayName','reason','status','requestedAt']) && request.resource.data.reason is string && request.resource.data.reason.size()<=500;
+   allow update: if signedIn() && request.auth.uid==uid && resource.data.status=='pending' && request.resource.data.uid==uid && request.resource.data.email==request.auth.token.email && request.resource.data.status=='pending' && request.resource.data.keys().hasOnly(['uid','email','displayName','reason','status','requestedAt']) && request.resource.data.reason is string && request.resource.data.reason.size()<=500;
+   allow read: if isInstructor() || (signedIn() && request.auth.uid==uid); allow delete:false;
+  }
+  match /sharedEmails/{uid} {
+   allow create,update: if signedIn() && request.auth.uid==uid && request.resource.data.studentUid==uid && request.resource.data.keys().hasOnly(['studentUid','studentEmail','gmailAccount','sender','subject','body','messageId','sharedAt']) && request.resource.data.body is string && request.resource.data.body.size()<=20000 && request.resource.data.subject is string && request.resource.data.sender is string;
+   allow read: if isInstructor() || (signedIn() && request.auth.uid==uid); allow delete: if isInstructor() || (signedIn() && request.auth.uid==uid);
+  }
+  function validSharedRecord(uid) {
+   return signedIn() && request.auth.uid==uid && request.resource.data.studentUid==uid
+    && request.resource.data.studentEmail is string && request.resource.data.studentEmail.size()<=200
+    && request.resource.data.date is string && request.resource.data.date.size()<=100
+    && request.resource.data.contact is string && request.resource.data.contact.size()<=160
+    && request.resource.data.phone is string && request.resource.data.phone.size()<=60
+    && request.resource.data.content is string && request.resource.data.content.size()<=5000
+    && request.resource.data.duration is string && request.resource.data.duration.size()<=60
+    && request.resource.data.keys().hasOnly(['studentUid','studentEmail','date','contact','phone','content','duration','sharedAt']);
+  }
+  match /sharedSms/{recordId} {
+   allow create: if validSharedRecord(request.resource.data.studentUid);
+   allow read: if isInstructor() || (signedIn() && resource.data.studentUid==request.auth.uid);
+   allow update: if false;
+   allow delete: if isInstructor() || (signedIn() && resource.data.studentUid==request.auth.uid);
+  }
+  match /sharedCalls/{recordId} {
+   allow create: if validSharedRecord(request.resource.data.studentUid);
+   allow read: if isInstructor() || (signedIn() && resource.data.studentUid==request.auth.uid);
+   allow update: if false;
+   allow delete: if isInstructor() || (signedIn() && resource.data.studentUid==request.auth.uid);
+  }
+ }
+}
